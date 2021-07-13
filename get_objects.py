@@ -43,7 +43,7 @@ def get_ticktok_nickname(url: str):
     except requests.exceptions.MissingSchema:
         return
     except requests.exceptions.InvalidURL:
-        return
+        return f'Invalid TikTok URL'
     src = req.text
 
     soup = BeautifulSoup(src, "lxml")
@@ -299,5 +299,3 @@ def balaboba_answer(message: str) -> str:
     res = response.read()
     text = json.loads(res)['text']
     return text
-
-

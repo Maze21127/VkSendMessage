@@ -8,11 +8,31 @@ from vk_messages.utils import get_random
 from requests import ConnectionError
 from time import time, sleep
 from http.client import RemoteDisconnected
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+import smtplib
 import vk_api
 
 from settings import *
 from get_objects import *
-from balaboba_class import YandexBalaboba
+from VkRequest import VkRequest
+
+
+def send_error_to_email(message):
+    msg = MIMEMultipart()
+    msg['Subject'] = f'Список лучших учеников по дисциплине {randint(0, 10000000)}'
+
+    to_email = 'invoker322sf@gmail.com'
+
+    msg.attach(MIMEText(message, 'plain'))
+
+    server = smtplib.SMTP('smtp.mail.ru: 25')
+    server.starttls()
+    server.login(EMAIL, EMAIL_PASSWORD)
+    server.sendmail(EMAIL, to_email, msg.as_string())
+
+    server.quit()
+    return
 
 
 def get_img(index=None) -> str:
@@ -37,7 +57,6 @@ def create_and_send_message(history, dialog_id):
     """
     Функция получает объект history и из него заполняет
     глобальный список словарями для последующих действий
-
     """
     global commands, active, start
     text_to_translate = None
@@ -189,6 +208,9 @@ messages = MessagesAPI(login=LOGIN, password=PASSWORD, two_factor=False, cookies
 vk_session = vk_api.VkApi(LOGIN, PASSWORD)
 vk_session.auth()
 vk = vk_session.get_api()
+words_list = ['Нервы', 'Джизус', 'Пошлая Молли']
+vkr_delay = 600
+vkr = VkRequest(messages, vk, domain='vdksell', words=words_list, notification_id=201675606, delay=vkr_delay)
 upload = vk_api.VkUpload(vk_session)
 
 print(f'{datetime.now().strftime("<%d-%m-%Y %H:%M:%S>")} bot started')
@@ -214,8 +236,14 @@ for user in user_id_set:
     except IndexError:
         print(f'Диалог с пользователем {user} не найден, пользователь удален из списка')
         continue
+    except vk_messages.Exception_MessagesAPI:
+        print(f'Диалог с пользователем {user} не найден, пользователь удален из списка')
+        continue
+
     correct_user_id_set.add(user)
 
+if len(correct_user_id_set) < 0:
+    exit('Нет подходящих диалогов')
 # Вывод оповещения для активации для каждого пользователя
 for user in correct_user_id_set:
     first_name = vk.users.get(name_case='gen', user_ids=user)[0]['first_name']
@@ -252,12 +280,20 @@ while True:
         print(f'{datetime.now().strftime("<%d-%m-%Y %H:%M:%S>")} error, trying login again')
         remove('sessions/' + listdir('sessions')[0])
         messages = MessagesAPI(login=LOGIN, password=PASSWORD, two_factor=False, cookies_save_path='sessions/')
+        send_error_to_email('AttributeError')
     except RemoteDisconnected as ex:
         logger.exception(ex)
-        pass
+        send_error_to_email(ex)
+        continue
     except ConnectionError as ex:
         logger.exception(ex)
-        pass
-    except Exception as e:
-        logger.exception(e)
+        send_error_to_email(ex)
         continue
+    except Exception as ex:
+        logger.exception(ex)
+        send_error_to_email(ex)
+        continue
+    if int(time() - start) % vkr_delay == 0:
+        print(f'Получены новые данные в {datetime.now().strftime("<%d-%m-%Y %H:%M:%S> ")}')
+        vkr.update_data()
+        vkr.check_words()
